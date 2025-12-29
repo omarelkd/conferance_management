@@ -1,0 +1,79 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway-service
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        - id: keynote-service
+          uri: lb://keynote-service
+          predicates:
+            - Path=/api/keynotes/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: keynoteCircuitBreaker
+                fallbackUri: forward:/fallback/keynote
+        - id: conference-service
+          uri: lb://conference-service
+          predicates:
+            - Path=/api/conferences/**, /api/reviews/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: conferenceCircuitBreaker
+                fallbackUri: forward:/fallback/conference
+        - id: keynote-swagger
+          uri: lb://keynote-service
+          predicates:
+            - Path=/keynote/v3/api-docs
+          filters:
+            - RewritePath=/keynote/v3/api-docs, /v3/api-docs
+        - id: conference-swagger
+          uri: lb://conference-service
+          predicates:
+            - Path=/conference/v3/api-docs
+          filters:
+            - RewritePath=/conference/v3/api-docs, /v3/api-docs
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://keycloak:8080/realms/realm-conference
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+springdoc:
+  swagger-ui:
+    urls:
+      - name: keynote-service
+        url: /keynote/v3/api-docs
+      - name: conference-service
+        url: /conference/v3/api-docs
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      keynoteCircuitBreaker:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10000
+      conferenceCircuitBreaker:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10000
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
